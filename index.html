@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Title</title>
+    <link rel="stylesheet" type="text/css" href="css/ext-all.css">
+</head>
+<body>
+
+<script type="text/javascript" src="js/ext-base.js"></script>
+<script type="text/javascript" src="js/ext-all.js"></script>
+<script type="text/javascript" src="js/ext-lang-zh_CN.js"></script>
+<script type="text/javascript">
+    var path='${ctx}'; //全局绝对路径
+    Ext.BLANK_IMAGE_URL = "resources/images/default/s.gif";
+    Ext.QuickTips.init();
+    Ext.form.Field.prototype.msgTarget = 'qtip';
+
+    /*Q.power = {
+        MaterialType: {
+            list: null,
+            add: null,
+            edit: null,
+            'delete': null
+        }
+    };*/
+
+    var moduleName = '物料类型', /*power = Q.power.MaterialType,*/ fatherCode = '-1';
+
+    Ext.onReady(function () {
+        var grid = new Ext.grid.GridPanel({
+            border: true,
+            style: "padding: 2px 2px 2px 0",
+            sm: {singleSelect:true},  // 选择模型, 单选, 多选
+            viewConfig: {
+                forceFit: true, // 表格自动延展每列长度，内容填满整个表格
+                autoScroll: true
+            },
+            cm: {
+                defaults: {width: 100, align: "left"},
+                columns: [
+                    {header: '物料类型编码', dataIndex: 'materialTypeCode'},
+                    {header: '物料类型名称', dataIndex: 'materialTypeName'},
+                    {header: '状态', dataIndex: 'status', disable: true}
+                ]
+            },
+            bbar: new Ext.PagingToolbar({
+                pageSize: 20,
+                store: {
+                    url: path + "/mmd/material/MaterialType_getJson.action"
+                },
+                displayInfo: true,
+                displayMsg: '显示第 {0} 条到 {1} 条记录, 一共 {2} 条',
+                emptyMsg: "没有记录"
+            }),
+            // 构造新建、编辑窗口
+            getEditWin: function(config){
+                var win  = new Q.mmd.MaterialTypeEditWin(config);
+                win.on('submit',function(){
+                    grid.getStore().reload();
+                    //tree.updateTree();
+                    tree.updateTreeByTree();
+                });
+                this.getEditWin = function(config){
+                    return win;
+                };
+                return win;
+            },
+            tbar: ['-', {
+                text: '新建',
+                iconCls: "icon-add",
+                handler: function(){
+                    var win = grid.getEditWin();
+                    win.formPanel.form.findField("model.fatherCode").setValue(fatherCode);
+                    win.show();
+                }
+            }, '-', {
+                text: '编辑',
+                iconCls: "icon-edit",
+                handler: function (_self) {
+                    var grid = this.findParentByType(Ext.grid.GridPanel);
+                    var record = grid.getSelectionModel().getSelected();
+                    var win = grid.getEditWin();
+                    win.formPanel.form.findField("model.materialTypeCode").setReadOnly(true);
+                    win.setFormValue(record.get("materialTypeCode"));
+                    win.show();
+                }
+            }, '-', {
+                text: '查看',
+                iconCls: "icon-edit",
+                hidden: true,
+                handler: function(_self){
+                    var grid = this.findParentByType(Ext.grid.GridPanel);
+                    var record = grid.getSelectionModel().getSelected();
+                    var win = grid.getEditWin();
+                    win.setTitle(moduleName);
+                    win.setFormValue(record.get("materialTypeCode"));
+                    win.show();
+                }
+            }, '-', {
+                text: '删除',
+                iconCls: "icon-delete",
+                handler: function () {
+                    var grid = this.findParentByType(Ext.grid.GridPanel);
+                    var record = grid.getSelectionModel().getSelected();
+                    var code = record.get("materialTypeCode");
+                    // 确认删除选中的信息吗?
+                    Ext.Msg.confirm('信息', '确定删除选中信息？', function(btn){
+                        if (btn == 'yes') {
+                            Ext.getBody().submitMask();
+                            Ext.Ajax.request({
+                                url: path + "/mmd/material/MaterialType_delete.action",
+                                success: function(response) {
+                                    var json = Ext.decode(response.responseText);
+                                    if (false === json.success) {
+                                        // 删除失败,未知系统异常
+                                        Q.error("<font color=''>" + json.info||"删除失败,未知系统异常!" + "</font>");
+                                        return;
+                                    }
+                                    // 删除成功
+                                    Q.tips("<font color='blue'>" + "删除成功!" + "</font>");
+                                    grid.getStore().reload();
+                                    tree.updateTree();
+                                },
+                                failure: function(response) {
+                                    // 删除失败! 请检查与服务器的连接是否正常，或稍候再试。
+                                    Q.error("<font color = ''>" + "删除失败! 请检查与服务器的连接是否正常，或稍候再试." + "</font>");
+                                },
+                                callback: function() {
+                                    Ext.getBody().unmask();
+                                },
+                                params: {"materialTypeCode": code}
+                            });
+                        }
+                    });
+                }
+            }, '-'],
+            listeners: {
+                "afterrender": function (g) {
+                    var sm = g.getSelectionModel();
+                    g.getStore().on('load', function(){
+                        sm.clearSelections();
+                        // 设置按钮置灰
+                        var tbar =grid.getTopToolbar();
+                        tbar.getObj = function(name){
+                            return this.find("name",name)[0];
+                        };
+                        if(power["delete"]){
+                            tbar.getObj("delete").setDisabled(true);
+                        }
+                        if(power.edit){
+                            tbar.getObj("edit").setDisabled(true);
+                        }
+                    });
+                },
+                "rowdblclick": function(g,i){
+                    var tbar = g.getTopToolbar();
+                    if (power.edit && tbar) {//有权限时进行操作
+                        tbar.find('name','edit')[0].handler();
+                    } else {
+                        tbar.find('name','view')[0].handler();
+                    }
+                },
+                "click":function(){
+                    var record = grid.getSelectionModel().getSelections();
+                    var tbar =grid.getTopToolbar();
+                    tbar.getObj = function(name){
+                        return this.find("name",name)[0];
+                    };
+                    if(Neu.isEmpty(record)){//选择行为空时，给他设置隐藏
+                        if(power["delete"]){
+                            tbar.getObj("delete").setDisabled(true);
+                        }
+                        if(power.edit){
+                            tbar.getObj("edit").setDisabled(true);
+                        }
+                    }else{
+                        if(power.edit){
+                            tbar.getObj("edit").setDisabled(false);
+                        }
+                        if(power["delete"]){
+                            tbar.getObj("delete").setDisabled(false);
+                        }
+
+                    }
+                }
+            }
+        });
+
+        var tree = new Ext.tree.TreePanel({
+            title: '物料类型',
+            rootVisible: true, //是否显示根节点
+            width: 180,
+            animate : true, // 动画效果
+            frame : true, // 美化界面
+            enableDD : false, // 是否支持拖拽效果
+            loader : new Ext.tree.TreeLoader({
+                dataUrl : path + "/mmd/material/MaterialType_getTree.action?key={0}"
+            })
+        });
+        // 异步加载根节点
+        var rootNode = new Ext.tree.AsyncTreeNode({
+            id: '-1',
+            text: '物料类型',
+            draggable : false,// 根节点不容许拖动
+            expanded : true
+        });
+        // 为tree设置根节点
+        tree.setRootNode(rootNode);
+        // 渲染树形
+        tree.render();
+        // 展开节点,第一个参数表示是否级联展开子节点
+        rootNode.expand(true);
+        tree.on('click', function (node) {
+            fatherCode = node.id;
+        });
+
+        var vp = new Ext.Viewport({
+            layout:"border",
+            items:[tree, grid]
+        });
+    });
+</script>
+<script type="text/javascript" src="Q.mmd.MaterialTypeWin.js"></script>
+</body>
+</html>
